@@ -7,10 +7,9 @@ import os
 # For local dev: Uses SQLite if DATABASE_URL is not set
 
 # Supabase PostgreSQL (default for deployment)
-SUPABASE_URL = "postgresql://postgres:BWZ4Hw0GQC2faxRB@db.ohxczgfayekbkyurqxdb.supabase.co:5432/postgres"
 
 # Get DATABASE_URL from environment or use Supabase as default
-DATABASE_URL = os.getenv("DATABASE_URL", SUPABASE_URL)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Create engine based on database type
 if DATABASE_URL.startswith("sqlite"):
