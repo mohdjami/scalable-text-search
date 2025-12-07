@@ -2,6 +2,7 @@ import axios from 'axios';
 import { SalesFilters, PaginatedResponse, FilterOptions } from '@/types/sales.types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+console.log('[API] Using backend URL:', API_BASE_URL);
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
@@ -17,9 +18,18 @@ export const salesAPI = {
     async searchSales(filters: SalesFilters): Promise<PaginatedResponse> {
         // Clean up undefined/null values before sending
         // Keep valid numbers (including 0) and non-empty arrays/strings
-        const cleanFilters: Record<string, unknown> = {};
+        const cleanFilters: Record<string, unknown> = {
+            // Always include required fields with defaults
+            sort_by: filters.sort_by || 'date',
+            sort_order: filters.sort_order || 'desc',
+            page: filters.page || 1,
+            page_size: filters.page_size || 10,
+        };
 
         for (const [key, value] of Object.entries(filters)) {
+            // Skip fields we've already set with defaults
+            if (['sort_by', 'sort_order', 'page', 'page_size'].includes(key)) continue;
+
             // Skip undefined and null
             if (value === undefined || value === null) continue;
 
