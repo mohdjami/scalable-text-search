@@ -9,6 +9,7 @@ class SalesService:
     """
     Business logic layer for sales operations.
     Handles complex filtering, searching, sorting, and pagination.
+    Works with both SQLite and PostgreSQL.
     """
     
     def __init__(self, db: Session):
@@ -17,29 +18,32 @@ class SalesService:
     def get_sales_with_filters(self, filters: SalesFilterRequest) -> PaginatedSalesResponse:
         """
         Main method to retrieve sales with all filters applied.
-        
-        Strategy:
-        1. Build base query
-        2. Apply search filter (OR condition on name/phone)
-        3. Apply multi-select filters (AND conditions)
-        4. Apply sorting
-        5. Calculate pagination
-        6. Execute query
         """
         
         # Start with base query
         query = self.db.query(SalesTransaction)
         
         # === SEARCH IMPLEMENTATION ===
-        # Case-insensitive search across customer_name and phone_number
+        # Case-insensitive search (works for both SQLite and PostgreSQL)
         if filters.search_query:
-            search_term = f"%{filters.search_query.lower()}%"
-            query = query.filter(
-                or_(
-                    func.lower(SalesTransaction.customer_name).like(search_term),
-                    func.lower(SalesTransaction.phone_number).like(search_term)
+            search_term = f"%{filters.search_query}%"
+            # Use ILIKE for PostgreSQL (case-insensitive), LIKE for SQLite
+            try:
+                query = query.filter(
+                    or_(
+                        SalesTransaction.customer_name.ilike(search_term),
+                        SalesTransaction.phone_number.ilike(search_term)
+                    )
                 )
-            )
+            except:
+                # Fallback for SQLite
+                search_term_lower = f"%{filters.search_query.lower()}%"
+                query = query.filter(
+                    or_(
+                        func.lower(SalesTransaction.customer_name).like(search_term_lower),
+                        func.lower(SalesTransaction.phone_number).like(search_term_lower)
+                    )
+                )
         
         # === FILTERS IMPLEMENTATION ===
         filter_conditions = []
@@ -68,7 +72,7 @@ class SalesService:
                 SalesTransaction.product_category.in_(filters.product_categories)
             )
         
-        # Tags Filter (Multi-select) - Special handling for comma-separated
+        # Tags Filter (Multi-select)
         if filters.tags:
             tag_conditions = []
             for tag in filters.tags:
@@ -93,6 +97,10 @@ class SalesService:
         if filter_conditions:
             query = query.filter(and_(*filter_conditions))
         
+        # === GET COUNT EFFICIENTLY ===
+        count_query = query.with_entities(func.count(SalesTransaction.id))
+        total_count = count_query.scalar()
+        
         # === SORTING IMPLEMENTATION ===
         sort_column = {
             "date": SalesTransaction.transaction_date,
@@ -106,10 +114,6 @@ class SalesService:
             query = query.order_by(sort_column.asc())
         
         # === PAGINATION IMPLEMENTATION ===
-        # Get total count before pagination
-        total_count = query.count()
-        
-        # Calculate pagination
         total_pages = math.ceil(total_count / filters.page_size) if total_count > 0 else 1
         offset = (filters.page - 1) * filters.page_size
         
@@ -119,7 +123,7 @@ class SalesService:
         # Execute query
         results = query.all()
         
-        # Transform results (parse tags from comma-separated)
+        # Transform results
         transformed_results = []
         for result in results:
             tags_list = [
@@ -142,10 +146,10 @@ class SalesService:
                 product_category=result.product_category or "",
                 tags=tags_list,
                 quantity=result.quantity or 0,
-                price_per_unit=result.price_per_unit or 0.0,
-                discount_percentage=result.discount_percentage or 0.0,
-                total_amount=result.total_amount or 0.0,
-                final_amount=result.final_amount or 0.0,
+                price_per_unit=float(result.price_per_unit) if result.price_per_unit else 0.0,
+                discount_percentage=float(result.discount_percentage) if result.discount_percentage else 0.0,
+                total_amount=float(result.total_amount) if result.total_amount else 0.0,
+                final_amount=float(result.final_amount) if result.final_amount else 0.0,
                 date=result.transaction_date,
                 payment_method=result.payment_method or "",
                 order_status=result.order_status or "",
@@ -167,10 +171,7 @@ class SalesService:
         )
     
     def get_filter_options(self) -> FilterOptionsResponse:
-        """
-        Get all unique values for filter dropdowns.
-        Used by frontend to populate filter options.
-        """
+        """Get all unique values for filter dropdowns."""
         return FilterOptionsResponse(
             customer_regions=self._get_unique_values(SalesTransaction.customer_region),
             genders=self._get_unique_values(SalesTransaction.gender),
@@ -181,18 +182,15 @@ class SalesService:
     
     def _get_unique_values(self, column) -> List[str]:
         """Helper to get distinct values from a column"""
-        return sorted([
-            val[0] for val in 
-            self.db.query(column).distinct().all() 
-            if val[0]
-        ])
+        result = self.db.query(column).distinct().limit(100).all()
+        return sorted([val[0] for val in result if val[0]])
     
     def _get_all_unique_tags(self) -> List[str]:
         """Parse all tags and return unique list"""
-        all_tags_raw = self.db.query(SalesTransaction.tags).all()
+        all_tags_raw = self.db.query(SalesTransaction.tags).distinct().limit(200).all()
         unique_tags = set()
         for tags_row in all_tags_raw:
             if tags_row[0]:
                 tags = [tag.strip() for tag in tags_row[0].split(',')]
                 unique_tags.update(t for t in tags if t)
-        return sorted(list(unique_tags))
+        return sorted(list(unique_tags))[:50]

@@ -2,13 +2,32 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
-# Use SQLite for simplicity
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sales.db")
+# Database configuration
+# For deployment: Set DATABASE_URL environment variable to your Supabase PostgreSQL connection string
+# For local dev: Uses SQLite if DATABASE_URL is not set
 
-engine = create_engine(
-    DATABASE_URL, 
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-)
+# Supabase PostgreSQL (default for deployment)
+SUPABASE_URL = "postgresql://postgres:BWZ4Hw0GQC2faxRB@db.ohxczgfayekbkyurqxdb.supabase.co:5432/postgres"
+
+# Get DATABASE_URL from environment or use Supabase as default
+DATABASE_URL = os.getenv("DATABASE_URL", SUPABASE_URL)
+
+# Create engine based on database type
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False}
+    )
+else:
+    # PostgreSQL settings
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True,
+        pool_recycle=300,
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
