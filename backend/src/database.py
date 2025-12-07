@@ -1,15 +1,17 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+from dotenv import load_dotenv
 import os
 
+# Load environment variables from .env file
+load_dotenv()
+
 # Database configuration
-# For deployment: Set DATABASE_URL environment variable to your Supabase PostgreSQL connection string
-# For local dev: Uses SQLite if DATABASE_URL is not set
-
-# Supabase PostgreSQL (default for deployment)
-
-# Get DATABASE_URL from environment or use Supabase as default
+# Set DATABASE_URL in .env or environment variable
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is required. Set it in .env file or environment.")
 
 # Create engine based on database type
 if DATABASE_URL.startswith("sqlite"):
