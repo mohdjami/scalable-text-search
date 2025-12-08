@@ -18,6 +18,7 @@ app.add_middleware(
         "http://localhost:3000",                      # Next.js dev server
         "http://127.0.0.1:3000",
         "https://scalable-text-search.vercel.app",   # Production Vercel deployment
+        "https://text-search.mohdjami.com",          # Custom domain
     ],
     allow_credentials=True,
     allow_methods=["*"],
